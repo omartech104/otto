@@ -1,0 +1,68 @@
+# --- Python Specifics ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# --- Virtual Environments ---
+# It is critical to exclude your local env to keep the repo clean
+.venv/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# --- Environment Variables (CRITICAL) ---
+# This is where you will store your GEMINI_API_KEY
+.env
+.env.local
+.env.shared
+.env.test
+.env.development
+.env.production
+*.env
+
+# --- AI & Data ---
+# If Otto saves local task history or logs
+*.log
+.otto_cache/
+otto_history.json
+
+# --- Editor & System ---
+# Neovim / Vim
+.netrwhist
+apps.pyc
+Session.vim
+.shada
+*~
+
+# Linux / MacOS system files
+.DS_Store
+.directory
+.nfs*
+
+# Obsidian / Documentation
+# Only ignore if you keep your "Second Brain" notes inside the repo
+.obsidian/
+
+# --- Testing ---
+.pytest_cache/
+.coverage
+htmlcov/
