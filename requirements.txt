@@ -1,3 +1,6 @@
-python-dotenv
-rich
 groq
+typer
+pydantic
+rich
+shellingham
+python-dateutil
