@@ -75,6 +75,73 @@ def run_health_check():
     console.print(health_table)
     console.print("[dim]" + "─" * 40 + "[/dim]")
 
+
+def prompt_otto(task_input):
+    """Sends task text to Groq and returns structured JSON analysis."""
+    
+    system_instructions = (
+        "You are Otto, a witty and efficient task manager. "
+        "Analyze the user's task and return ONLY a JSON object with: "
+        "'task' (name), 'energy' (1-5), 'impact' (1-100), "
+        "'category' (domain), and 'otto_note' (a short, witty comment). "
+        "Return raw JSON only."
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_instructions},
+                {"role": "user", "content": task_input}
+            ],
+            temperature=0.2, # Keeps the AI focused on the format
+            response_format={"type": "json_object"} # Forces JSON output
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        console.print(f"[bold red]Error reaching the brain:[/bold red] {e}")
+        return None
+
+
+def list_tasks():
+    cursor = conn.cursor()
+    """Lists all tasks in the database."""
+    cursor.execute("SELECT id, task, energy, impact, status FROM tasks")
+
+# 3. Pull the data into the variable
+    rows = cursor.fetchall()
+    table = Table(title="Otto Task Board", header_style="bold magenta")
+    if not rows:
+        console.print("[yellow]No tasks found. Use 'otto add' to create one.[/yellow]")
+        return
+
+
+# 2. Define Columns (ID, Task, Energy, Impact, Status)
+    table.add_column("ID", justify="right", style="cyan", no_wrap=True)
+    table.add_column("Task", style="white")
+    table.add_column("Energy", justify="center", style="green")
+    table.add_column("Impact", justify="center", style="yellow")
+    table.add_column("Status", justify="right")
+
+# 3. Populate Rows
+    for row in rows:
+    # row is a tuple: (id, task, energy, impact, status)
+    # We convert all elements to strings because Rich expects string input
+        table.add_row(
+            str(row[0]), 
+            row[1], 
+            "⚡" * row[2], # Visual representation of energy
+            f"{row[3]}%", 
+            row[4]
+        )
+
+# 4. Print to Console
+    console.print(table)
+
+def add_task():
+    """Adds a new task to the database."""
+    pass
+
 # 4. Execution Logic (Command Router)
 if len(sys.argv) < 2:
     console.print("[bold yellow]Usage:[/bold yellow] otto { health | list | add }")
@@ -86,10 +153,10 @@ if command in ["health", "status"]:
     run_health_check()
 
 elif command == "list":
-    console.print("[cyan]Querying database...[/cyan]")
+    list_tasks()
 
 elif command == "add":
-    console.print("[green]Awaiting neural input...[/green]")
+    pass
 
 else:
     console.print(f"[bold red]Unknown command:[/bold red] '{command}'")
