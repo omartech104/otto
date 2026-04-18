@@ -64,7 +64,7 @@ def prompt_otto(task_input):
     system_instructions = (
         "You are Otto, a witty and efficient task manager. "
         "Analyze the user's task and return ONLY a JSON object with: "
-        "'task', 'energy' (1-5), 'impact' (1-100), 'category', and 'otto_note'. "
+        "'task', 'energy' (1-5), 'impact' (1-100), 'category', and 'otto_note' (a short ,witty AI generated tip). "
         "Return raw JSON only."
     )
     try:
@@ -136,6 +136,18 @@ def add_task():
     else:
         console.print("[red]AI returned no data.[/red]")
 
+def delete_task(task_id):
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+    conn.commit()
+    console.print(f"[green]✓ Task Deleted:[/green] {task_id}")
+
+def clear_tasks():
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM tasks")
+    conn.commit()
+    console.print("[green]✓ All Tasks Deleted.[/green]")
+
 # Command Router
 if len(sys.argv) < 2:
     console.print("[bold yellow]Usage:[/bold yellow] otto { health | list | add }")
@@ -149,6 +161,13 @@ elif command == "list":
     list_tasks()
 elif command == "add":
     add_task()
+elif command == "delete":
+    if len(sys.argv) < 3:
+        console.print("[bold red]Error:[/bold red] Provide a task ID.")
+        sys.exit(1)
+    delete_task(sys.argv[2])
+elif command == "clear":
+    clear_tasks()
 else:
     console.print(f"[bold red]Unknown command:[/bold red] '{command}'")
     sys.exit(1)
