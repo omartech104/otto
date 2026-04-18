@@ -14,14 +14,14 @@ Otto is a witty and efficient AI-powered task manager for your terminal. It does
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/yourusername/otto.git
+    git clone https://github.com/omartech104/otto.git
     cd otto
     ```
 
 2.  **Set up a virtual environment:**
     ```bash
     python -m venv venv
-    source venv/bin/activate  # On Windows: venv\Scripts\activate
+    source venv/bin/activate
     ```
 
 3.  **Install dependencies:**
