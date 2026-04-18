@@ -148,6 +148,50 @@ def clear_tasks():
     conn.commit()
     console.print("[green]✓ All Tasks Deleted.[/green]")
 
+def mark_task_complete(task_id):
+    """Updates task status and gets a witty AI congratulation."""
+    cursor = conn.cursor()
+    
+    # 1. Verify the task exists and get its name for the AI context
+    cursor.execute("SELECT task FROM tasks WHERE id = ?", (task_id,))
+    result = cursor.fetchone()
+    
+    if not result:
+        console.print(f"[bold red]Error:[/bold red] Task ID {task_id} not found.")
+        return
+
+    task_name = result[0]
+
+    # 2. Update status in the database
+    cursor.execute("UPDATE tasks SET status = 'complete' WHERE id = ?", (task_id,))
+    conn.commit()
+    
+    console.print(Panel(f"[bold green]✓ Task Finished:[/bold green] {task_name}", expand=False))
+
+    # 3. Generate a custom witty congratulation
+    # We call the API directly here to avoid the JSON constraint of prompt_otto
+    try:
+        with console.status("[italic]Otto is writing a victory speech...", spinner="aesthetic"):
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {
+                        "role": "system", 
+                        "content": "You are Otto, a witty task manager. Give a short, one-sentence, clever, and slightly sarcastic congratulation for finishing a task."
+                    },
+                    {
+                        "role": "user", 
+                        "content": f"I just finished this task: {task_name}"
+                    }
+                ],
+                temperature=0.8 # Higher temperature for more variety in wit
+            )
+            message = response.choices[0].message.content
+            console.print(f"[bold magenta]Otto:[/bold magenta] [italic]{message}[/italic]\n")
+    except Exception:
+        # Fallback if the API fails or is offline
+        console.print("[dim italic]Otto nods in silent approval.[/dim italic]\n")
+
 # Command Router
 if len(sys.argv) < 2:
     console.print("[bold yellow]Usage:[/bold yellow] otto { health | list | add }")
@@ -168,6 +212,11 @@ elif command == "delete":
     delete_task(sys.argv[2])
 elif command == "clear":
     clear_tasks()
+elif command == "finish":
+    if len(sys.argv) < 3:
+        console.print("[bold red]Error:[/bold red] Provide a task ID.")
+        sys.exit(1)
+    mark_task_complete(sys.argv[2])
 else:
     console.print(f"[bold red]Unknown command:[/bold red] '{command}'")
     sys.exit(1)
