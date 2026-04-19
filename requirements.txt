@@ -4,3 +4,4 @@ pydantic
 rich
 shellingham
 python-dateutil
+pyfiglet
