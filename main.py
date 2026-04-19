@@ -3,6 +3,8 @@ import sys
 import sqlite3
 import json
 import pyfiglet
+import typer
+from typing import Optional
 from pathlib import Path
 from groq import Groq
 from rich.console import Console
@@ -10,21 +12,23 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.markdown import Markdown
 
-# 1. Initialize UI and AI Client
+# 1. Initialize Typer and UI
+app = typer.Typer(help="Otto: Your witty AI-powered task manager.")
 console = Console()
+
+# 2. Configuration & AI Client
 API_KEY = os.environ.get("GROQ_API_KEY")
 client = Groq(api_key=API_KEY)
 
-# 2. Database Path Logic
+# 3. Database Path Logic
 db_dir = Path(os.path.expanduser("~/.local/share/otto"))
 db_dir.mkdir(parents=True, exist_ok=True)
 db_path = db_dir / "tasks.db"
 
-# 3. Database Initialization
-def init_db():
+# 4. Database Initialization
+def get_db_conn():
     conn = sqlite3.connect(str(db_path))
-    cursor = conn.cursor()
-    cursor.execute('''
+    conn.execute('''
         CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             task TEXT NOT NULL,
@@ -37,30 +41,6 @@ def init_db():
     ''')
     conn.commit()
     return conn
-
-conn = init_db()
-
-def run_health_check():
-    console.print(Panel("[bold cyan]Otto System Diagnostic[/bold cyan]", expand=False))
-    health_table = Table(show_header=False, box=None, padding=(0, 2))
-
-    if API_KEY:
-        health_table.add_row("AI Engine", f"[green]✓ Connected[/green] [dim](...{API_KEY[-4:]})[/dim]")
-    else:
-        health_table.add_row("AI Engine", "[red]✗ GROQ_API_KEY missing[/red]")
-
-    if db_path.exists():
-        try:
-            test_conn = sqlite3.connect(str(db_path))
-            test_conn.execute("SELECT 1")
-            health_table.add_row("Database", "[green]✓ Healthy[/green]")
-            test_conn.close()
-        except sqlite3.Error:
-            health_table.add_row("Database", "[red]✗ File Corrupted[/red]")
-    
-    shell_env = os.environ.get('SHELL', 'Unknown')
-    health_table.add_row("Context", f"[blue]Linux[/blue] [dim]({shell_env})[/dim]")
-    console.print(health_table)
 
 def prompt_otto(task_input):
     system_instructions = (
@@ -84,11 +64,39 @@ def prompt_otto(task_input):
         console.print(f"[bold red]Error reaching the brain:[/bold red] {e}")
         return None
 
+# --- Commands ---
+
+@app.command()
+def health():
+    """Check the status of the AI engine and local database."""
+    console.print(Panel("[bold cyan]Otto System Diagnostic[/bold cyan]", expand=False))
+    health_table = Table(show_header=False, box=None, padding=(0, 2))
+
+    if API_KEY:
+        health_table.add_row("AI Engine", f"[green]✓ Connected[/green] [dim](...{API_KEY[-4:]})[/dim]")
+    else:
+        health_table.add_row("AI Engine", "[red]✗ GROQ_API_KEY missing[/red]")
+
+    try:
+        conn = get_db_conn()
+        conn.execute("SELECT 1")
+        health_table.add_row("Database", "[green]✓ Healthy[/green]")
+        conn.close()
+    except sqlite3.Error:
+        health_table.add_row("Database", "[red]✗ File Corrupted or Inaccessible[/red]")
+    
+    shell_env = os.environ.get('SHELL', 'Unknown')
+    health_table.add_row("Context", f"[blue]Linux[/blue] [dim]({shell_env})[/dim]")
+    console.print(health_table)
+
+@app.command(name="list")
 def list_tasks():
+    """Display all tasks sorted by impact."""
+    conn = get_db_conn()
     cursor = conn.cursor()
-    # FIX: We must fetch ALL columns we want to display, including otto_note
     cursor.execute("SELECT id, task, energy, impact, status, otto_note FROM tasks ORDER BY impact DESC")
     rows = cursor.fetchall()
+    conn.close()
     
     if not rows:
         console.print("[yellow]No tasks found. Use 'otto add' to create one.[/yellow]")
@@ -103,7 +111,6 @@ def list_tasks():
     table.add_column("Otto's Note", style="dim italic")
 
     for row in rows:
-        # row[0]=id, row[1]=task, row[2]=energy, row[3]=impact, row[4]=status, row[5]=otto_note
         table.add_row(
             str(row[0]),
             row[1],
@@ -114,64 +121,71 @@ def list_tasks():
         )
     console.print(table)
 
-def add_task():
-    if len(sys.argv) < 3:
-        console.print("[bold red]Error:[/bold red] Provide a description.")
-        return
-
-    user_input = " ".join(sys.argv[2:])
+@app.command()
+def add(description: str = typer.Argument(..., help="The task you want Otto to analyze and add.")):
+    """Add a new task with AI-generated energy and impact scores."""
     with console.status("[bold cyan]Otto is thinking...", spinner="dots"):
-        raw_json = prompt_otto(user_input)
+        raw_json = prompt_otto(description)
 
     if raw_json:
         try:
             data = json.loads(raw_json)
+            conn = get_db_conn()
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO tasks (task, energy, impact, category, otto_note)
                 VALUES (?, ?, ?, ?, ?)
             ''', (data['task'], data['energy'], data['impact'], data['category'], data['otto_note']))
             conn.commit()
+            conn.close()
             console.print(f"[green]✓ Task Saved:[/green] {data['task']}")
         except Exception as e:
             console.print(f"[red]Database Error: {e}[/red]")
     else:
         console.print("[red]AI returned no data.[/red]")
 
-def delete_task(task_id):
+@app.command()
+def delete(task_id: int = typer.Argument(..., help="The ID of the task to remove.")):
+    """Delete a task from the database by its ID."""
+    conn = get_db_conn()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
     conn.commit()
+    conn.close()
     console.print(f"[green]✓ Task Deleted:[/green] {task_id}")
 
-def clear_tasks():
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM tasks")
-    conn.commit()
-    console.print("[green]✓ All Tasks Deleted.[/green]")
+@app.command()
+def clear():
+    """Wipe all tasks from the database. Use with caution!"""
+    if typer.confirm("Are you sure you want to delete ALL tasks?"):
+        conn = get_db_conn()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM tasks")
+        conn.commit()
+        conn.close()
+        console.print("[green]✓ All Tasks Deleted.[/green]")
 
-def mark_task_complete(task_id):
-    """Updates task status and gets a witty AI congratulation."""
+@app.command()
+def finish(task_id: int = typer.Argument(..., help="The ID of the task to mark complete.")):
+    """Complete a task and get a witty congratulation from Otto."""
+    conn = get_db_conn()
     cursor = conn.cursor()
     
-    # 1. Verify the task exists and get its name for the AI context
     cursor.execute("SELECT task FROM tasks WHERE id = ?", (task_id,))
     result = cursor.fetchone()
     
     if not result:
         console.print(f"[bold red]Error:[/bold red] Task ID {task_id} not found.")
+        conn.close()
         return
 
     task_name = result[0]
-
-    # 2. Update status in the database
     cursor.execute("UPDATE tasks SET status = 'complete' WHERE id = ?", (task_id,))
     conn.commit()
+    conn.close()
     
     console.print(Panel(f"[bold green]✓ Task Finished:[/bold green] {task_name}", expand=False))
 
-    # 3. Generate a custom witty congratulation
-    # We call the API directly here to avoid the JSON constraint of prompt_otto
     try:
         with console.status("[italic]Otto is writing a victory speech...", spinner="aesthetic"):
             response = client.chat.completions.create(
@@ -186,39 +200,31 @@ def mark_task_complete(task_id):
                         "content": f"I just finished this task: {task_name}"
                     }
                 ],
-                temperature=0.8 # Higher temperature for more variety in wit
+                temperature=0.8
             )
             message = response.choices[0].message.content
             console.print(f"[bold magenta]Otto:[/bold magenta] [italic]{message}[/italic]\n")
     except Exception:
-        # Fallback if the API fails or is offline
         console.print("[dim italic]Otto nods in silent approval.[/dim italic]\n")
 
-def start_chat():
-    """Enters a persistent, interactive chat mode with an Otto splash screen."""
-    
-    # Dynamically fetch the system username (e.g., Omar)
+@app.command()
+def chat():
+    """Enter the Neural Link (interactive chat mode)."""
     try:
         username = os.getlogin().capitalize()
     except Exception:
         username = "User"
 
-    # 1. Clear the terminal for the 'App' experience
     os.system('clear' if os.name == 'posix' else 'cls')
-
-    # 2. Render the ASCII Banner
-    # 'block' font mirrors the heavy, pixelated look of your reference image
     ascii_banner = pyfiglet.figlet_format("OTTO", font="block")
     console.print(f"[bold magenta]{ascii_banner}[/bold magenta]")
-    
     console.print(f"[dim]Neural link established. Welcome back, {username}.[/dim]")
     console.print("[dim]Type 'exit' to quit or 'clear' to wipe the screen.[/dim]\n")
 
     while True:
-        # 3. Minimalist Input Prompt
         try:
             user_query = console.input("[bold cyan]> [/bold cyan]").strip()
-        except EOFError: # Handles Ctrl+D
+        except EOFError:
             break
 
         if not user_query:
@@ -233,10 +239,11 @@ def start_chat():
             console.print(f"[bold magenta]{ascii_banner}[/bold magenta]")
             continue
 
-        # 4. Refresh Task Context from SQLite
+        conn = get_db_conn()
         cursor = conn.cursor()
         cursor.execute("SELECT task, energy, impact, status, otto_note FROM tasks")
         rows = cursor.fetchall()
+        conn.close()
         
         task_list_str = "Currently, the database is empty."
         if rows:
@@ -245,12 +252,11 @@ def start_chat():
                 for r in rows
             ])
 
-        # 5. Define the Persona & Generate Response
         system_instructions = (
             f"You are Otto, a witty and efficient task management AI. "
             f"The user's name is {username}. You have access to their SQLite task list. "
             "Answer questions concisely, cleverly, and with a touch of sarcasm. "
-            "Use Markdown (headers, bolding, lists) to format your response for the terminal."
+            "Use Markdown to format your response."
         )
 
         try:
@@ -262,49 +268,15 @@ def start_chat():
                         {"role": "user", "content": f"Task List:\n{task_list_str}\n\nUser Question: {user_query}"}
                     ]
                 )
-                
-                # FIX: Explicitly handle the potential None type from the API 
                 answer = response.choices[0].message.content
-
                 if answer:
-                    # Render properly using Rich's Markdown parser
-                    md = Markdown(answer)
                     console.print("\n")
-                    console.print(md)
+                    console.print(Markdown(answer))
                     console.print("\n")
                 else:
                     console.print("[yellow]Otto is lost in thought... (Empty API response).[/yellow]")
-                
         except Exception as e:
             console.print(f"[bold red]Neural Link Error:[/bold red] {e}")
 
-# Command Router
-if len(sys.argv) < 2:
-    console.print("[bold yellow]Usage:[/bold yellow] otto { health | list | add }")
-    sys.exit(0)
-
-command = sys.argv[1].lower()
-
-if command in ["health", "status"]:
-    run_health_check()
-elif command == "list":
-    list_tasks()
-elif command == "add":
-    add_task()
-elif command == "delete":
-    if len(sys.argv) < 3:
-        console.print("[bold red]Error:[/bold red] Provide a task ID.")
-        sys.exit(1)
-    delete_task(sys.argv[2])
-elif command == "clear":
-    clear_tasks()
-elif command == "finish":
-    if len(sys.argv) < 3:
-        console.print("[bold red]Error:[/bold red] Provide a task ID.")
-        sys.exit(1)
-    mark_task_complete(sys.argv[2])
-elif command == "chat":
-    start_chat()
-else:
-    console.print(f"[bold red]Unknown command:[/bold red] '{command}'")
-    sys.exit(1)
+if __name__ == "__main__":
+    app()
