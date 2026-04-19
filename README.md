@@ -4,11 +4,12 @@ Otto is a witty and efficient AI-powered task manager for your terminal. It does
 
 ## Features
 
-- **AI Analysis:** Uses Groq (Llama 3) to evaluate task energy requirements and potential impact.
-- **Witty Personality:** Otto provides clever tips and sarcastic congratulations upon finishing tasks.
-- **Prioritization:** Tasks are automatically ranked by their impact.
-- **Simple CLI:** Clean, intuitive commands for managing your workflow.
-- **System Health Checks:** Built-in diagnostics to verify API and database connectivity.
+-   **Neural Link (Chat Mode):** Enter a persistent, interactive chat mode to manage your tasks and get advice.
+-   **AI Analysis:** Uses Groq (Llama 3.3) to evaluate task energy requirements and potential impact.
+-   **Witty Personality:** Otto provides clever tips and sarcastic congratulations upon finishing tasks.
+-   **Prioritization:** Tasks are automatically ranked by their impact.
+-   **Simple CLI:** Clean, intuitive commands for managing your workflow.
+-   **System Health Checks:** Built-in diagnostics to verify AI and database connectivity.
 
 ## Installation
 
@@ -41,7 +42,12 @@ Otto uses a simple command structure: `python main.py <command>`.
 
 ### Available Commands
 
--   **`health`**: Check the status of your AI connection and database.
+-   **`chat`**: Enter the interactive Neural Link session.
+    ```bash
+    python main.py chat
+    ```
+
+-   **`health`** (or **`status`**): Check the status of your AI connection and database.
     ```bash
     python main.py health
     ```
