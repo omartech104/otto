@@ -62,15 +62,33 @@ Otto uses a simple command structure: `python main.py <command>`.
     python main.py list
     ```
 
--   **`finish`**: Mark a task as complete and receive Otto's "congratulations."
+-   **`edit`**: Modify an existing task.
     ```bash
-    python main.py finish <task_id>
+    # Update description (triggers AI re-analysis)
+    python main.py edit <task_id> --description "New description"
+    
+    # Manually update specific fields
+    python main.py edit <task_id> --energy 3 --impact 80 --category "Work"
     ```
 
--   **`delete`**: Remove a specific task.
+-   **`finish`**: Mark one or more tasks as complete.
     ```bash
-    python main.py delete <task_id>
+    # Single task
+    python main.py finish <task_id>
+    
+    # Bulk finish
+    python main.py finish <task_id_1> <task_id_2> <task_id_3>
     ```
+
+-   **`delete`**: Remove one or more tasks.
+    ```bash
+    # Single task
+    python main.py delete <task_id>
+    
+    # Bulk delete
+    python main.py delete <task_id_1> <task_id_2>
+    ```
+
 
 -   **`clear`**: Wipe all tasks from the database.
     ```bash
