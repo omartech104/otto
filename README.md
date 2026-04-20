@@ -57,7 +57,7 @@ Otto uses a simple command structure: `python main.py <command>`.
     python main.py add "Write documentation for the new API"
     ```
 
--   **`list`**: Display all pending tasks sorted by impact.
+-   **`list`**: Display all tasks sorted by impact, including IDs, categories, and Otto's notes.
     ```bash
     python main.py list
     ```

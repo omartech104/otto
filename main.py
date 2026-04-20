@@ -91,10 +91,10 @@ def health():
 
 @app.command(name="list")
 def list_tasks():
-    """List all tasks sorted by their impact score. Shows ID, energy, and Otto's notes."""
+    """List all tasks sorted by their impact score. Shows ID, category, energy, and Otto's notes."""
     conn = get_db_conn()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, task, energy, impact, status, otto_note FROM tasks ORDER BY impact DESC")
+    cursor.execute("SELECT id, task, energy, impact, status, otto_note, category FROM tasks ORDER BY impact DESC")
     rows = cursor.fetchall()
     conn.close()
     
@@ -104,6 +104,7 @@ def list_tasks():
 
     table = Table(title="Otto Task Board", header_style="bold magenta")
     table.add_column("ID", justify="right", style="cyan")
+    table.add_column("Category", style="yellow")
     table.add_column("Task", style="white")
     table.add_column("Energy", justify="center")
     table.add_column("Impact", justify="center")
@@ -111,13 +112,18 @@ def list_tasks():
     table.add_column("Otto's Note", style="dim italic")
 
     for row in rows:
+        # Shorten Otto's note for a cleaner list view
+        note = row[5] if row[5] else ""
+        short_note = (note[:37] + "...") if len(note) > 40 else note
+        
         table.add_row(
             str(row[0]),
+            row[6] if row[6] else "General",
             row[1],
             "⚡" * row[2],
             f"{row[3]}%",
             row[4],
-            row[5]
+            short_note
         )
     console.print(table)
 
