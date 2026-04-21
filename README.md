@@ -1,105 +1,76 @@
 # Otto 🤖
+**The Task Manager with an Attitude Problem.**
 
-Otto is a witty and efficient AI-powered task manager for your terminal. It doesn't just track your tasks; it analyzes them using AI to provide energy ratings, impact scores, and slightly sarcastic encouragement.
+Otto is a witty, efficient, and slightly judgmental AI-powered task manager for your terminal. While most task managers just sit there quietly, Otto analyzes your life choices using Llama 3.3 to provide energy ratings, impact scores, and the kind of feedback you'd expect from a disappointed mentor.
 
-## Features
+---
 
--   **Neural Link (Chat Mode):** Enter a persistent, interactive chat mode to manage your tasks and get advice.
--   **AI Analysis:** Uses Groq (Llama 3.3) to evaluate task energy requirements and potential impact.
--   **Witty Personality:** Otto provides clever tips and sarcastic congratulations upon finishing tasks.
--   **Prioritization:** Tasks are automatically ranked by their impact.
--   **Simple CLI:** Clean, intuitive commands for managing your workflow.
--   **System Health Checks:** Built-in diagnostics to verify AI and database connectivity.
+## ✨ Features
 
-## Installation
+- **🧠 Neural Link (Chat Mode):** Step into an interactive session where Otto manages your tasks and provides life advice (mostly sarcastic). He now has full access to your stats, so expect judgment.
+- **📊 Performance Reviews:** Use the `review` command to get a brutal, AI-generated assessment of your productivity. Otto looks at your completion rates and tells you how you're *really* doing.
+- **⏳ Temporal Awareness:** Otto tracks how long your tasks have been rotting. Tasks older than 3 days are highlighted as "stale" because, let's face it, you're procrastinating.
+- **⚡ AI-Driven Analysis:** Every task you add is evaluated for its **Energy Requirement** (1-5 ⚡) and **Impact Score** (1-100%). Otto sorts your list by impact so you stop doing the easy stuff first.
+- **🏆 Collective Victories:** Finish multiple tasks at once and get a single, punchy, AI-generated backhanded compliment.
+- **🛠️ Self-Healing Core:** Built-in migrations and health checks to ensure your database and AI brain are always in sync.
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/omartech104/otto.git
-    cd otto
-    ```
+---
 
-2.  **Set up a virtual environment:**
-    ```bash
-    python -m venv venv
-    source venv/bin/activate
-    ```
+## 🚀 Installation
 
-3.  **Install dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+1. **Clone the brain:**
+   ```bash
+   git clone https://github.com/omartech104/otto.git
+   cd otto
+   ```
 
-4.  **Set your Groq API Key:**
-    Get an API key from [Groq](https://console.groq.com/) and add it to your environment:
-    ```bash
-    export GROQ_API_KEY='your_api_key_here'
-    ```
+2. **Prepare the environment:**
+   ```bash
+   python -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   ```
 
-## Usage
+3. **Feed the AI:**
+   Get an API key from [Groq](https://console.groq.com/) and export it:
+   ```bash
+   export GROQ_API_KEY='your_api_key_here'
+   ```
 
-Otto uses a simple command structure: `python main.py <command>`.
+---
 
-### Available Commands
+## 🎮 How to use Otto
 
--   **`chat`**: Enter the interactive Neural Link session.
-    ```bash
-    python main.py chat
-    ```
+### The Essentials
+- **`list`**: View your pending tasks. Otto sorts them by impact.
+  - `python main.py list` (Pending only)
+  - `python main.py list --all` (Show your finished work too)
+- **`add`**: Add a task and let Otto judge it.
+  - `python main.py add "Fix the broken production server"`
+- **`finish`**: Mark tasks as done.
+  - `python main.py finish 1 4 7` (Bulk completion supported)
 
--   **`health`** (or **`status`**): Check the status of your AI connection and database.
-    ```bash
-    python main.py health
-    ```
+### The Personality
+- **`chat`**: Enter the interactive Neural Link.
+  - `python main.py chat`
+- **`review`**: Get your productivity performance review.
+  - `python main.py review`
 
--   **`add`**: Add a new task with AI analysis.
-    ```bash
-    python main.py add "Write documentation for the new API"
-    ```
+### Maintenance & Management
+- **`edit`**: Change a task. If you change the description, Otto re-analyzes everything.
+  - `python main.py edit 2 --description "Actually just order pizza"`
+- **`delete`**: Remove mistakes.
+  - `python main.py delete 5`
+- **`health`**: Check if Otto's brain is still connected.
+  - `python main.py health`
+- **`clear`**: Wipe the slate clean (requires confirmation).
+  - `python main.py clear`
 
--   **`list`**: Display all tasks sorted by impact, including IDs, categories, and Otto's notes.
-    ```bash
-    python main.py list
-    ```
+---
 
--   **`edit`**: Modify an existing task.
-    ```bash
-    # Update description (triggers AI re-analysis)
-    python main.py edit <task_id> --description "New description"
-    
-    # Manually update specific fields
-    python main.py edit <task_id> --energy 3 --impact 80 --category "Work"
-    ```
-
--   **`finish`**: Mark one or more tasks as complete.
-    ```bash
-    # Single task
-    python main.py finish <task_id>
-    
-    # Bulk finish
-    python main.py finish <task_id_1> <task_id_2> <task_id_3>
-    ```
-
--   **`delete`**: Remove one or more tasks.
-    ```bash
-    # Single task
-    python main.py delete <task_id>
-    
-    # Bulk delete
-    python main.py delete <task_id_1> <task_id_2>
-    ```
-
-
--   **`clear`**: Wipe all tasks from the database.
-    ```bash
-    python main.py clear
-    ```
-
-## Storage
-
-Otto stores your tasks locally in an SQLite database located at:
+## 📦 Storage
+Your tasks are stored locally in a highly secure (well, it's SQLite) database at:
 `~/.local/share/otto/tasks.db`
 
-## License
-
-This project is licensed under the [MIT License](LICENSE).
+## ⚖️ License
+Licensed under the [MIT License](LICENSE). Otto doesn't care what you do with the code, as long as you actually finish your tasks.

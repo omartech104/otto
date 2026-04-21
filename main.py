@@ -4,6 +4,7 @@ import sqlite3
 import json
 import pyfiglet
 import typer
+from datetime import datetime
 from typing import Optional
 from pathlib import Path
 from groq import Groq
@@ -25,9 +26,10 @@ db_dir = Path(os.path.expanduser("~/.local/share/otto"))
 db_dir.mkdir(parents=True, exist_ok=True)
 db_path = db_dir / "tasks.db"
 
-# 4. Database Initialization
+# 4. Database Initialization & Migrations
 def get_db_conn():
     conn = sqlite3.connect(str(db_path))
+    # Standard table creation
     conn.execute('''
         CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,17 +38,30 @@ def get_db_conn():
             impact INTEGER,       
             category TEXT,        
             otto_note TEXT,       
-            status TEXT DEFAULT 'pending'
+            status TEXT DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    
+    # Migration: Add created_at if it doesn't exist (for existing users)
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(tasks)")
+    columns = [column[1] for column in cursor.fetchall()]
+    if 'created_at' not in columns:
+        try:
+            conn.execute("ALTER TABLE tasks ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        except sqlite3.OperationalError:
+            pass # Column might already exist in some edge cases
+            
     conn.commit()
     return conn
 
 def prompt_otto(task_input):
     system_instructions = (
-        "You are Otto, a witty and efficient task manager. "
+        "You are Otto, a witty, slightly cynical, and highly efficient task manager. "
         "Analyze the user's task and return ONLY a JSON object with: "
-        "'task', 'energy' (1-5), 'impact' (1-100), 'category', and 'otto_note' (a short ,witty AI generated tip). "
+        "'task' (cleaned up title), 'energy' (1-5, where 1 is easy and 5 is soul-crushing), "
+        "'impact' (1-100, where 100 is life-changing), 'category', and 'otto_note' (a short, witty, or mildly sarcastic AI tip). "
         "Return raw JSON only."
     )
     try:
@@ -61,10 +76,72 @@ def prompt_otto(task_input):
         )
         return response.choices[0].message.content
     except Exception as e:
-        console.print(f"[bold red]Error reaching the brain:[/bold red] {e}")
+        console.print(f"[bold red]Otto's brain is fuzzy:[/bold red] {e}")
         return None
 
 # --- Commands ---
+
+@app.command()
+def review():
+    """Ask Otto for a performance review based on your task history."""
+    conn = get_db_conn()
+    cursor = conn.cursor()
+    
+    # Gather stats
+    cursor.execute("SELECT COUNT(*) FROM tasks")
+    total = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM tasks WHERE status = 'complete'")
+    completed = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT category, COUNT(*) FROM tasks GROUP BY category ORDER BY COUNT(*) DESC LIMIT 3")
+    categories = cursor.fetchall()
+    cat_str = ", ".join([f"{c[0]} ({c[1]})" for c in categories]) if categories else "None"
+    
+    cursor.execute("SELECT AVG(impact) FROM tasks WHERE status = 'complete'")
+    avg_impact = cursor.fetchone()[0] or 0
+    
+    cursor.execute("SELECT task FROM tasks WHERE status = 'pending' ORDER BY created_at ASC LIMIT 3")
+    stale_tasks = cursor.fetchall()
+    stale_str = "\n".join([f"- {t[0]}" for t in stale_tasks]) if stale_tasks else "None"
+
+    conn.close()
+
+    if total == 0:
+        console.print("[yellow]Otto can't review a ghost town. Add some tasks first.[/yellow]")
+        return
+
+    stats_context = (
+        f"User Statistics:\n"
+        f"- Total Tasks: {total}\n"
+        f"- Completed: {completed} ({int(completed/total*100) if total > 0 else 0}% success rate)\n"
+        f"- Average Impact of Completed Work: {avg_impact:.1f}%\n"
+        f"- Top Categories: {cat_str}\n"
+        f"- Oldest Pending Tasks:\n{stale_str}"
+    )
+
+    with console.status("[bold magenta]Otto is judging your productivity...", spinner="earth"):
+        try:
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {
+                        "role": "system", 
+                        "content": "You are Otto, a witty and slightly sarcastic task manager. Provide a concise performance review based on the user's stats. Be honest, a bit cheeky, and provide one actionable (but snarky) piece of advice. Use Markdown."
+                    },
+                    {
+                        "role": "user", 
+                        "content": stats_context
+                    }
+                ],
+                temperature=0.8
+            )
+            review_text = response.choices[0].message.content
+            console.print("\n")
+            console.print(Panel(Markdown(review_text), title="[bold cyan]Otto's Performance Review[/bold cyan]", border_style="magenta"))
+            console.print("\n")
+        except Exception as e:
+            console.print(f"[red]Otto is speechless (error): {e}[/red]")
 
 @app.command()
 def health():
@@ -90,42 +167,63 @@ def health():
     console.print(health_table)
 
 @app.command(name="list")
-def list_tasks():
-    """List all tasks sorted by their impact score. Shows ID, category, energy, and Otto's notes."""
+def list_tasks(all: bool = typer.Option(False, "--all", "-a", help="Show all tasks, including completed ones.")):
+    """List pending tasks sorted by impact. Shows ID, category, energy, and Otto's judgment."""
     conn = get_db_conn()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, task, energy, impact, status, otto_note, category FROM tasks ORDER BY impact DESC")
+    query = "SELECT id, task, energy, impact, status, otto_note, category, created_at FROM tasks"
+    if not all:
+        query += " WHERE status = 'pending'"
+    query += " ORDER BY impact DESC"
+    
+    cursor.execute(query)
     rows = cursor.fetchall()
     conn.close()
     
     if not rows:
-        console.print("[yellow]No tasks found. Use 'otto add' to create one.[/yellow]")
+        console.print("[yellow]Your list is empty. Otto is suspicious of your 'productivity'.[/yellow]")
         return
 
-    table = Table(title="Otto Task Board", header_style="bold magenta")
+    table = Table(title="Otto's hit list", header_style="bold magenta")
     table.add_column("ID", justify="right", style="cyan")
-    table.add_column("Category", style="yellow")
+    table.add_column("Cat", style="yellow")
     table.add_column("Task", style="white")
     table.add_column("Energy", justify="center")
     table.add_column("Impact", justify="center")
-    table.add_column("Status", justify="right")
+    table.add_column("Age", justify="center")
     table.add_column("Otto's Note", style="dim italic")
 
     for row in rows:
-        # Shorten Otto's note for a cleaner list view
-        note = row[5] if row[5] else ""
-        short_note = (note[:37] + "...") if len(note) > 40 else note
+        task_id, task, energy, impact, status, note, category, created_at = row
+        
+        # Calculate age and add warning for stale tasks
+        try:
+            created_dt = datetime.strptime(created_at, "%Y-%m-%d %H:%M:%S")
+            age_days = (datetime.now() - created_dt).days
+            age_str = f"{age_days}d"
+        except (ValueError, TypeError):
+            age_str = "?"
+            age_days = 0
+        
+        task_display = task
+        if age_days > 3 and status == 'pending':
+            task_display = f"[bold red]![/bold red] {task}"
+            age_str = f"[bold red]{age_str}[/bold red]"
+
+        short_note = (note[:37] + "...") if note and len(note) > 40 else (note or "")
         
         table.add_row(
-            str(row[0]),
-            row[6] if row[6] else "General",
-            row[1],
-            "⚡" * row[2],
-            f"{row[3]}%",
-            row[4],
+            str(task_id),
+            category if category else "General",
+            task_display,
+            "⚡" * (energy or 0),
+            f"{impact}%",
+            age_str,
             short_note
         )
     console.print(table)
+    if not all:
+        console.print("[dim]Use --all to see completed tasks.[/dim]")
 
 @app.command()
 def add(description: str = typer.Argument(..., help="Detailed description of the task for Otto's analysis.")):
@@ -190,54 +288,51 @@ def clear():
         console.print("[green]✓ All Tasks Deleted.[/green]")
 
 @app.command()
-def finish(task_ids: Optional[list[int]] = typer.Argument(None, help="The ID(s) of the task to mark as finished. Supports bulk completion.")):
-    """Complete tasks and get a witty congratulation from Otto for each."""
-    if not task_ids:
-        console.print("[bold red]Error:[/bold red] Please provide at least one task ID to finish.")
-        return
-
+def finish(task_ids: list[int] = typer.Argument(..., help="The ID(s) of the task to mark as finished.")):
+    """Complete tasks and get a witty congratulation from Otto."""
     conn = get_db_conn()
     cursor = conn.cursor()
 
-    tasks_finished = []
+    finished_names = []
     for task_id in task_ids:
-        cursor.execute("SELECT task FROM tasks WHERE id = ?", (task_id,))
+        cursor.execute("SELECT task FROM tasks WHERE id = ? AND status = 'pending'", (task_id,))
         result = cursor.fetchone()
-
-        if not result:
-            console.print(f"[bold red]Error:[/bold red] Task ID {task_id} not found.")
-            continue
-
-        task_name = result[0]
-        cursor.execute("UPDATE tasks SET status = 'complete' WHERE id = ?", (task_id,))
-        tasks_finished.append(task_name)
+        if result:
+            cursor.execute("UPDATE tasks SET status = 'complete' WHERE id = ?", (task_id,))
+            finished_names.append(result[0])
+        else:
+            console.print(f"[dim red]Task ID {task_id} not found or already finished.[/dim red]")
 
     conn.commit()
     conn.close()
 
-    for task_name in tasks_finished:
-        console.print(Panel(f"[bold green]✓ Task Finished:[/bold green] {task_name}", expand=False))
+    if not finished_names:
+        return
 
-        try:
-            with console.status("[italic]Otto is writing a victory speech...", spinner="aesthetic"):
-                response = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[
-                        {
-                            "role": "system", 
-                            "content": "You are Otto, a witty task manager. Give a very short, one-sentence, clever, and slightly sarcastic congratulation for finishing a task."
-                        },
-                        {
-                            "role": "user", 
-                            "content": f"I just finished this task: {task_name}"
-                        }
-                    ],
-                    temperature=0.8
-                )
-                message = response.choices[0].message.content
-                console.print(f"[bold magenta]Otto:[/bold magenta] [italic]{message}[/italic]\n")
-        except Exception:
-            console.print("[dim italic]Otto nods in silent approval.[/dim italic]\n")
+    # Collective Victory Speech
+    console.print(Panel(f"[bold green]✓ Finished:[/bold green] {', '.join(finished_names)}", expand=False))
+    
+    try:
+        with console.status("[italic]Otto is writing a backhanded compliment...", spinner="aesthetic"):
+            task_context = "; ".join(finished_names)
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {
+                        "role": "system", 
+                        "content": "You are Otto, a witty task manager. Give a single, very short, clever, and slightly sarcastic congratulation for finishing these specific tasks. One sentence max."
+                    },
+                    {
+                        "role": "user", 
+                        "content": f"I finished: {task_context}"
+                    }
+                ],
+                temperature=0.8
+            )
+            message = response.choices[0].message.content
+            console.print(f"[bold magenta]Otto:[/bold magenta] [italic]{message}[/italic]\n")
+    except Exception:
+        console.print("[dim italic]Otto nods in silent, skeptical approval.[/dim italic]\n")
 @app.command()
 def edit(
     task_id: int = typer.Argument(..., help="The ID of the task you wish to modify."),
@@ -350,22 +445,29 @@ def chat():
 
         conn = get_db_conn()
         cursor = conn.cursor()
-        cursor.execute("SELECT task, energy, impact, status, otto_note FROM tasks")
+        cursor.execute("SELECT task, energy, impact, status, created_at FROM tasks")
         rows = cursor.fetchall()
+        
+        # Calculate some stats for chat context
+        total = len(rows)
+        completed = len([r for r in rows if r[3] == 'complete'])
+        pending = total - completed
+        
         conn.close()
         
         task_list_str = "Currently, the database is empty."
         if rows:
             task_list_str = "\n".join([
-                f"- {r[0]} | Energy: {r[1]}/5 | Impact: {r[2]}% | Status: {r[3]}" 
+                f"- {r[0]} | Energy: {r[1]}/5 | Impact: {r[2]}% | Status: {r[3]} (Created: {r[4]})" 
                 for r in rows
             ])
 
         system_instructions = (
-            f"You are Otto, a witty and efficient task management AI. "
-            f"The user's name is {username}. You have access to their SQLite task list. "
-            "Answer questions concisely, cleverly, and with a touch of sarcasm. "
-            "Use Markdown to format your response."
+            f"You are Otto, a witty, efficient, and slightly cynical task management AI. "
+            f"The user's name is {username}. You have access to their task list.\n"
+            f"Stats: {completed}/{total} completed. {pending} pending.\n"
+            "Answer questions concisely, with clever sarcasm. If they ask about their progress, "
+            "be honest but judging. Use Markdown."
         )
 
         try:
