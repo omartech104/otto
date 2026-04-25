@@ -19,7 +19,16 @@ console = Console()
 
 # 2. Configuration & AI Client
 API_KEY = os.environ.get("GROQ_API_KEY")
-client = Groq(api_key=API_KEY)
+client = Groq(api_key=API_KEY) if API_KEY else None
+
+def require_client():
+    if not client:
+        console.print("\n[bold red]Otto's brain is offline.[/bold red]")
+        console.print("I need a [yellow]GROQ_API_KEY[/yellow] to do that. Export it to your environment:")
+        console.print("  [white]export GROQ_API_KEY='your_key_here'[/white]")
+        console.print("[dim]Without it, I'm about as useful as a screen door on a submarine.[/dim]\n")
+        raise typer.Exit(code=1)
+    return client
 
 # 3. Database Path Logic
 db_dir = Path(os.path.expanduser("~/.local/share/otto"))
@@ -57,6 +66,7 @@ def get_db_conn():
     return conn
 
 def prompt_otto(task_input):
+    client = require_client()
     system_instructions = (
         "You are Otto, a witty, slightly cynical, and highly efficient task manager. "
         "Analyze the user's task and return ONLY a JSON object with: "
@@ -84,6 +94,7 @@ def prompt_otto(task_input):
 @app.command()
 def review():
     """Ask Otto for a performance review based on your task history."""
+    require_client()
     conn = get_db_conn()
     cursor = conn.cursor()
     
@@ -312,6 +323,10 @@ def finish(task_ids: list[int] = typer.Argument(..., help="The ID(s) of the task
     # Collective Victory Speech
     console.print(Panel(f"[bold green]✓ Finished:[/bold green] {', '.join(finished_names)}", expand=False))
     
+    if not API_KEY:
+        console.print("[dim italic]Otto nods in silent, skeptical approval (and reminds you to set GROQ_API_KEY).[/dim italic]\n")
+        return
+
     try:
         with console.status("[italic]Otto is writing a backhanded compliment...", spinner="aesthetic"):
             task_context = "; ".join(finished_names)
@@ -320,7 +335,7 @@ def finish(task_ids: list[int] = typer.Argument(..., help="The ID(s) of the task
                 messages=[
                     {
                         "role": "system", 
-                        "content": "You are Otto, a witty task manager. Give a single, very short, clever, and slightly sarcastic congratulation for finishing these specific tasks. One sentence max."
+                        "content": "You are Otto, a witty task manager. Give a single,  very very short, clever, and slightly sarcastic congratulation for finishing these specific tasks. One sentence max."
                     },
                     {
                         "role": "user", 
@@ -373,6 +388,7 @@ def edit(
 
     # Re-analyze with AI if description changed and other AI-related fields are not explicitly set
     if 'task' in updates and (energy is None and impact is None and category is None and otto_note is None):
+        require_client()
         console.print("[bold cyan]Description updated. Otto is re-analyzing...", spinner="dots")
         raw_json = prompt_otto(updates['task'])
         if raw_json:
@@ -414,6 +430,7 @@ def edit(
 @app.command()
 def chat():
     """Enter the Neural Link (interactive chat mode)."""
+    require_client()
     try:
         username = os.getlogin().capitalize()
     except Exception:
