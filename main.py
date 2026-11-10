@@ -76,7 +76,7 @@ def prompt_otto(task_input):
     )
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=[
                 {"role": "system", "content": system_instructions},
                 {"role": "user", "content": task_input}
@@ -134,7 +134,7 @@ def review():
     with console.status("[bold magenta]Otto is judging your productivity...", spinner="earth"):
         try:
             response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model="openai/gpt-oss-120b",
                 messages=[
                     {
                         "role": "system", 
